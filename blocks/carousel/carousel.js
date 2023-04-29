@@ -1,112 +1,85 @@
-function calculateScrollbarWidth() {
-  document.documentElement.style.setProperty(
-    '--scrollbar-width',
-    `${window.innerWidth - document.documentElement.clientWidth}px`,
-  );
-}
+const getCenterX = (element) => {
+  const rect = element.getBoundingClientRect();
+  return rect.left + rect.width / 2;
+};
 
-function selectButton(block, button, row, buttons) {
-  const index = [...buttons].indexOf(button);
-  const arrows = block.parentNode.querySelector('.carousel-controls');
-
-  block.scrollTo({ top: 0, left: row.offsetLeft - row.parentNode.offsetLeft, behavior: 'smooth' });
-  buttons.forEach((r) => r.classList.remove('selected'));
-  button.classList.add('selected');
-
-  // enable arrows
-  [...arrows.children].forEach((arrow) => arrow.classList.remove('disabled'));
-
-  // disable arrows
-  if (index === 0) {
-    arrows.querySelector('.prev').classList.add('disabled');
-  } else if (index >= buttons.length - 1) {
-    arrows.querySelector('.next').classList.add('disabled');
-  }
-}
-
-function getVisibleSlide(event) {
-  const { target } = event;
-  const buttons = target.nextElementSibling.querySelectorAll('button');
-  const slides = target.querySelectorAll(':scope > div');
-  const leftPosition = target.scrollLeft;
-  let leftPadding = 0;
-
-  slides.forEach((slide, key) => {
-    const offset = slide.offsetLeft;
-
-    // set first offset (extra padding?)
-    if (key === 0) leftPadding = offset;
-
-    if (offset - leftPadding === leftPosition) {
-      // trigger default functionality
-      selectButton(target, buttons[key], slide, buttons);
+const onNavClick = (buttonName) => {
+  const blockElement = document.querySelector('.carousel');
+  const items = blockElement.querySelectorAll(':scope > div');
+  const wrapperElement = document.querySelector('.carousel-wrapper');
+  const wrapperRect = wrapperElement.getBoundingClientRect();
+  let visibleCount = 0;
+  let offsideItemsNeeded = 0;
+  items.forEach((item, index) => {
+    if (getCenterX(item) > wrapperRect.left && getCenterX(item) < wrapperRect.right) {
+      visibleCount += 1;
+      if (buttonName === 'prev') {
+        offsideItemsNeeded = (2 * visibleCount) - (index + 1);
+      } else {
+        offsideItemsNeeded = visibleCount - items.length + (index + 1);
+      }
     }
   });
-}
-
-export default function decorate(block) {
-  const buttons = document.createElement('div');
-  const autoPlayList = [];
-  const carouselInterval = null;
-
-  // dots
-  buttons.className = 'carousel-buttons';
-  [...block.children].forEach((row, i) => {
-    // set classes
-    [...row.children].forEach((child) => {
-      if (child.querySelector('picture')) {
-        child.classList.add('carousel-image');
-      } else {
-        child.classList.add('carousel-text');
-      }
-    });
-
-    // move icon to parent's parent
-    const icon = row.querySelector('span.icon');
-    if (icon) icon.parentNode.parentNode.prepend(icon);
-
-    /* buttons */
-    const button = document.createElement('button');
-    button.setAttribute('aria-label', `Carousel Button ${i}`);
-    if (!i) button.classList.add('selected');
-    button.addEventListener('click', () => {
-      window.clearInterval(carouselInterval);
-      selectButton(block, button, row, [...buttons.children]);
-    });
-    buttons.append(button);
-    autoPlayList.push({ row, button });
+  const scrollX = visibleCount * (getCenterX(items.item(1)) - getCenterX(items.item(0)));
+  for (let i = 0; i < offsideItemsNeeded; i++) {
+    if (buttonName === 'prev') {
+      blockElement.prepend(blockElement.removeChild(blockElement.lastElementChild));
+    } else {
+      blockElement.append(blockElement.removeChild(blockElement.firstElementChild));
+    }
+  }
+  wrapperElement.scrollBy({
+    left: buttonName === 'prev' ? -scrollX : scrollX,
+    top: 0,
+    behavior: 'smooth',
   });
-  block.parentElement.append(buttons);
+};
 
-  // arrows
+const createNavigationControls = () => {
   const arrows = document.createElement('div');
-  const prev = document.createElement('button');
-  const next = document.createElement('button');
-
-  arrows.classList.add('carousel-controls');
-  prev.classList.add('prev', 'disabled');
-  prev.setAttribute('aria-label', 'Carosuel Previous');
-  next.classList.add('next');
-  next.setAttribute('aria-label', 'Carosuel Next');
+  arrows.classList.add('carousel-nav');
+  const prev = document.createElement('div');
+  prev.innerHTML = `<svg
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          color="#222222"
+          stroke="currentColor"
+          stroke-width="2">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>`;
+  const next = document.createElement('div');
+  next.innerHTML = `<svg
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          color="#222222"
+          stroke="currentColor"
+          stroke-width="2">
+          <polyline points="9 18 15 12 9 6"></polyline>
+        </svg>`;
+  prev.classList.add('prev', 'carousel-nav-button');
+  next.classList.add('next', 'carousel-nav-button');
+  prev.addEventListener('click', () => {
+    onNavClick('prev');
+  });
+  next.addEventListener('click', () => {
+    onNavClick('next');
+  });
   arrows.append(prev);
   arrows.append(next);
-  [...arrows.children].forEach((arrow) => arrow.addEventListener('click', ({ target }) => {
-    const active = buttons.querySelector('.selected');
-    const index = [...buttons.children].indexOf(active);
+  document.querySelector('.carousel')
+    .parentElement
+    .parentElement
+    .append(arrows);
+};
 
-    if (target.classList.contains('disabled')) return;
-
-    if (target.classList.contains('prev')) {
-      [...buttons.children].at(index - 1).click();
-    } else if (target.classList.contains('next')) {
-      [...buttons.children].at(index + 1).click();
-    }
-  }));
-  block.parentElement.append(arrows);
-
-  // attach scroll event
-  block.addEventListener('scroll', getVisibleSlide);
-
-  calculateScrollbarWidth();
-  window.addEventListener('resize', calculateScrollbarWidth, false);
+export default function decorate(block) {
+  block.querySelectorAll('a')
+    .forEach((el) => {
+      el.removeAttribute('class');
+    });
+  createNavigationControls();
 }
